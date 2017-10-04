@@ -1,0 +1,42 @@
+# List RHN subscribed Channels/Repos on Rhel System. Subscription Manager is used for Rhel 7 and greater or
+# if subscription_manager flag set to yes. Else RHN classic is used.
+# Up to 5 Retries attempted on failure. 10 second delay between retries.
+#     Input:  hosts                (opt) - List of hosts to add channels to
+#             rhn_user             (opt) - Red Hat Network user
+#             rhn_pass             (opt) - Red Hat Network user password
+#             subscription_manager (opt) - Use subscription manager flag
+# 
+- name: list channels 
+  hosts: '{{ hosts | default("testsystems") }}'
+
+  vars:
+    rhn_usr: '{{ rhn_user | default("qa@redhat.com") }}'
+    rhn_password: '{{ rhn_pass | default("AC7YeKvJ7j8ZPu8") }}'
+    sub_manager: '{{ subscription_manager | default("no") }}'
+
+  remote_user: root
+
+  tasks:
+  # RHN classic list channels
+  - name: list channels 
+    shell: rhn-channel -l -u {{ rhn_usr }} -p {{ rhn_password }} > /tmp/channels.txt
+    register: result
+    retries: 5
+    delay: 10
+    when: ansible_distribution_version|int < 7 and '{{ sub_manager }}' == 'no'
+
+  - debug: var=result.stdout_lines
+
+  # Subscription manager list enabled channels
+  - name: list subscription-manager repos 
+    shell: "subscription-manager repos --list | grep 'Enabled:.*1' -B 3 | grep 'Repo ID:' > /tmp/channels.txt"
+    register: result
+    retries: 5
+    delay: 10
+    when: ansible_distribution_version|int >= 7 or '{{ sub_manager }}' == 'yes'
+
+  - name: fetch results
+    fetch: src=/tmp/channels.txt dest=/tmp/channels
+
+  - debug: var=result.stdout_lines
+
